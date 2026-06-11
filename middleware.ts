@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { ADMIN_COOKIE, verifyAdminToken } from "@/lib/adminAuth";
-import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { CREATOR_COOKIE, verifySessionToken } from "@/lib/lineSession";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -9,8 +8,7 @@ export async function middleware(request: NextRequest) {
   // 管理者ダッシュボードは admin_session cookie を検証
   if (pathname.startsWith("/admin/dashboard")) {
     const token = request.cookies.get(ADMIN_COOKIE)?.value;
-    const ok = await verifyAdminToken(token);
-    if (!ok) {
+    if (!(await verifyAdminToken(token))) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
       return NextResponse.redirect(url);
@@ -18,44 +16,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // それ以外は Supabase セッションを更新する
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    getSupabaseUrl(),
-    getSupabaseAnonKey(),
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(
-          cookiesToSet: {
-            name: string;
-            value: string;
-            options?: CookieOptions;
-          }[]
-        ) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          );
-        },
-      },
+  // 申請ページは LINEログインのクリエイターセッションを検証
+  if (pathname.startsWith("/apply")) {
+    const token = request.cookies.get(CREATOR_COOKIE)?.value;
+    if (!(await verifySessionToken(token))) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      return NextResponse.redirect(url);
     }
-  );
+    return NextResponse.next();
+  }
 
-  await supabase.auth.getUser();
-
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    // 静的ファイルと画像以外にマッチ
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/admin/dashboard/:path*", "/apply/:path*"],
 };

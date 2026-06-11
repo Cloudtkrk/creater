@@ -342,19 +342,24 @@ export default function Dashboard({
                     {cell.day}
                   </div>
                   <div className="space-y-0.5">
-                    {dayApps.map((a) => (
-                      <div
-                        key={a.id}
-                        title={`${a.creator_name} / ${a.brand}`}
-                        className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight ${
-                          a.status === "approved"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {a.creator_name}・{a.brand}
-                      </div>
-                    ))}
+                    {dayApps.map((a) => {
+                      const label = a.tiktok_id
+                        ? `@${a.tiktok_id}`
+                        : a.creator_name;
+                      return (
+                        <div
+                          key={a.id}
+                          title={`${label} / ${a.brand}`}
+                          className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight ${
+                            a.status === "approved"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {label}・{a.brand}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -421,12 +426,13 @@ export default function Dashboard({
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[760px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="px-2 py-2">クリエイター</th>
                   <th className="px-2 py-2">ブランド</th>
                   <th className="px-2 py-2">期間</th>
+                  <th className="px-2 py-2">備考</th>
                   <th className="px-2 py-2">ステータス</th>
                   <th className="px-2 py-2 text-right">操作</th>
                 </tr>
@@ -435,7 +441,7 @@ export default function Dashboard({
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-2 py-8 text-center text-gray-400"
                     >
                       該当する申請はありません。
@@ -449,15 +455,24 @@ export default function Dashboard({
                   >
                     <td className="px-2 py-3">
                       <div className="font-medium text-gray-900">
-                        {a.creator_name}
+                        {a.tiktok_id ? `@${a.tiktok_id}` : "（ID未登録）"}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {a.creator_email}
+                        LINE: {a.creator_name}
                       </div>
                     </td>
                     <td className="px-2 py-3 text-gray-700">{a.brand}</td>
                     <td className="px-2 py-3 text-gray-700">
                       {formatDate(a.start_date)} 〜 {formatDate(a.end_date)}
+                    </td>
+                    <td className="px-2 py-3 text-gray-700">
+                      {a.note ? (
+                        <span className="block max-w-[220px] whitespace-pre-wrap break-words text-xs">
+                          {a.note}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-2 py-3">
                       <StatusBadge status={a.status} />

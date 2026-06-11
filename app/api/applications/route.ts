@@ -1,27 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { createClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CREATOR_COOKIE, verifySessionToken } from "@/lib/lineSession";
 import { MAX_DAYS_PER_SCHEDULE } from "@/lib/brands";
 import { diffDaysInclusive, formatDate, getMinApplyDate } from "@/lib/date";
+import { isValidTiktokId, normalizeTiktokId } from "@/lib/tiktok";
 import type { ApplyEntry, Brand } from "@/types";
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient();
-
-  // 認証チェック
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // 認証チェック（LINEログインで発行したセッション cookie）
+  const token = cookies().get(CREATOR_COOKIE)?.value;
+  const session = await verifySessionToken(token);
+  if (!session) {
     return NextResponse.json({ error: "未認証です。" }, { status: 401 });
   }
 
-  let body: { entries?: ApplyEntry[] };
+  let body: { entries?: ApplyEntry[]; tiktokId?: string; note?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "不正なリクエストです。" }, { status: 400 });
+  }
+
+  // 備考（任意・自由記載）。空文字は null として保存。
+  const note = (body.note ?? "").trim().slice(0, 1000) || null;
+
+  // TikTok クリエイターID の検証
+  const tiktokId = normalizeTiktokId(body.tiktokId ?? "");
+  if (!tiktokId) {
+    return NextResponse.json(
+      { error: "TikTokクリエイターIDを入力してください。" },
+      { status: 400 }
+    );
+  }
+  if (!isValidTiktokId(tiktokId)) {
+    return NextResponse.json(
+      { error: "TikTok IDの形式が正しくありません。" },
+      { status: 400 }
+    );
   }
 
   const entries = body.entries;
@@ -31,6 +48,9 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  // クリエイターは Supabase セッションを持たないため、書き込みは service role で行う
+  const supabase = createAdminClient();
 
   // 登録済みブランド一覧を取得してホワイトリストにする
   const { data: brandRows } = await supabase.from("brands").select("name");
@@ -75,19 +95,31 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const creatorName =
-    (user.user_metadata?.name as string | undefined) ?? user.email ?? "クリエイター";
-  const creatorEmail = user.email ?? "";
+  // TikTok ID を creators に保存（次回ログイン時のプリフィル用に永続化）
+  const { error: creatorError } = await supabase.from("creators").upsert(
+    {
+      line_user_id: session.uid,
+      tiktok_id: tiktokId,
+      name: session.name,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "line_user_id" }
+  );
+  if (creatorError) {
+    console.error("クリエイター情報の保存に失敗:", creatorError);
+  }
+
   const submissionId = randomUUID();
 
   const rows = entries.map((entry) => ({
     submission_id: submissionId,
-    creator_id: user.id,
-    creator_name: creatorName,
-    creator_email: creatorEmail,
+    line_user_id: session.uid,
+    tiktok_id: tiktokId,
+    creator_name: session.name,
     brand: entry.brand,
     start_date: entry.startDate,
     end_date: entry.endDate,
+    note,
     status: "pending",
   }));
 

@@ -2,117 +2,101 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
+
+type Phase = "init" | "authenticating" | "error";
 
 export default function LoginPage() {
   const router = useRouter();
-  const supabase = createClient();
+  const [phase, setPhase] = useState<Phase>("init");
+  const [message, setMessage] = useState("LINEに接続しています...");
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
-
-  // ログイン済みなら /apply へ
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        router.replace("/apply");
-      } else {
-        setChecking(false);
+    let cancelled = false;
+
+    async function run() {
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+      if (!liffId) {
+        setPhase("error");
+        setMessage("LIFF IDが設定されていません。管理者にお問い合わせください。");
+        return;
       }
-    });
+
+      try {
+        const liff = (await import("@line/liff")).default;
+        await liff.init({ liffId });
+
+        if (!liff.isLoggedIn()) {
+          // LINEログイン画面へ（戻ってくると isLoggedIn = true）
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+
+        if (cancelled) return;
+        setPhase("authenticating");
+        setMessage("ログイン処理中...");
+
+        const idToken = liff.getIDToken();
+        if (!idToken) {
+          throw new Error("IDトークンを取得できませんでした。");
+        }
+
+        const res = await fetch("/api/auth/line", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const base = data.error || "ログインに失敗しました。";
+          throw new Error(data.detail ? `${base}\n${data.detail}` : base);
+        }
+
+        if (cancelled) return;
+        router.replace("/apply");
+        router.refresh();
+      } catch (err) {
+        if (cancelled) return;
+        console.error("LINEログイン処理でエラー:", err);
+        setPhase("error");
+        setMessage(
+          err instanceof Error ? err.message : "ログインに失敗しました。"
+        );
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError("メールアドレスまたはパスワードが正しくありません。");
-      setLoading(false);
-      return;
-    }
-
-    router.replace("/apply");
-    router.refresh();
-  }
-
-  if (checking) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-4">
-        <p className="text-gray-500">読み込み中...</p>
-      </main>
-    );
-  }
-
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-bold text-gray-900">ログイン</h1>
-        <p className="mb-6 text-sm text-gray-500">
-          タイムセール申請システム
-        </p>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-sm">
+        <h1 className="mb-2 text-xl font-bold text-gray-900">
+          タイムセール申請
+        </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              メールアドレス
-            </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-              placeholder="you@example.com"
-            />
+        {phase !== "error" ? (
+          <div className="mt-6 flex flex-col items-center gap-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-green-500" />
+            <p className="text-sm text-gray-500">{message}</p>
           </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              パスワード
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-              {error}
+        ) : (
+          <div className="mt-6">
+            <p className="whitespace-pre-line break-words rounded-lg bg-red-50 px-3 py-2 text-left text-sm text-red-600">
+              {message}
             </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-pink-600 py-2.5 font-medium text-white transition hover:bg-pink-700 disabled:opacity-60"
-          >
-            {loading ? "ログイン中..." : "ログイン"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-600">
-          アカウントをお持ちでない方は{" "}
-          <Link href="/signup" className="font-medium text-pink-600 hover:underline">
-            新規登録
-          </Link>
-        </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 rounded-lg bg-green-600 px-6 py-2.5 font-medium text-white transition hover:bg-green-700"
+            >
+              再試行
+            </button>
+          </div>
+        )}
       </div>
     </main>
   );

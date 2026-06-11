@@ -6,15 +6,24 @@ export interface Brand {
   created_at: string;
 }
 
+// LINEユーザーごとのプロフィール（TikTok IDを永続化する）
+export interface Creator {
+  line_user_id: string;
+  tiktok_id: string | null;
+  name: string | null;
+  updated_at: string;
+}
+
 export interface Application {
   id: string;
   submission_id: string;
-  creator_id: string;
+  line_user_id: string | null;
+  tiktok_id: string | null;
   creator_name: string;
-  creator_email: string;
   brand: string;
   start_date: string; // YYYY-MM-DD
   end_date: string; // YYYY-MM-DD
+  note: string | null;
   status: ApplicationStatus;
   created_at: string;
   updated_at: string;

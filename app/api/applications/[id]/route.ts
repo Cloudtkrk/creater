@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendApprovalEmail } from "@/lib/email";
+import { sendLinePush } from "@/lib/line";
+import { buildApprovalMessage } from "@/lib/notify";
 import { isAdminAuthorized } from "@/lib/adminRequest";
 import type { Application, UpdateApplicationBody } from "@/types";
 
@@ -43,19 +44,21 @@ export async function PATCH(
     );
   }
 
-  // 承認時はメール送信
-  if (body.status === "approved") {
+  // 承認時は LINE プッシュ通知を送信
+  if (body.status === "approved" && data.line_user_id) {
     try {
-      await sendApprovalEmail({
-        creatorName: data.creator_name,
-        creatorEmail: data.creator_email,
-        brand: data.brand,
-        startDate: data.start_date,
-        endDate: data.end_date,
-      });
+      await sendLinePush(
+        data.line_user_id,
+        buildApprovalMessage({
+          creatorName: data.creator_name,
+          brand: data.brand,
+          startDate: data.start_date,
+          endDate: data.end_date,
+        })
+      );
     } catch (e) {
-      // メール失敗でもステータス更新は成功とする（ログのみ）
-      console.error("メール送信に失敗:", e);
+      // 通知失敗でもステータス更新は成功とする（ログのみ）
+      console.error("LINE通知の送信に失敗:", e);
     }
   }
 

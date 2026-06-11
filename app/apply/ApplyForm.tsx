@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   MAX_BRANDS,
   MAX_SCHEDULES_PER_BRAND,
@@ -14,12 +13,13 @@ import {
   formatDate,
   getMinApplyDate,
 } from "@/lib/date";
+import { isValidTiktokId, normalizeTiktokId } from "@/lib/tiktok";
 import type { ApplyEntryForm, ApplyEntry } from "@/types";
 
 interface Props {
   creatorName: string;
-  creatorEmail: string;
   brands: string[];
+  initialTiktokId: string;
 }
 
 function emptySchedule() {
@@ -32,12 +32,13 @@ function emptyEntry(): ApplyEntryForm {
 
 export default function ApplyForm({
   creatorName,
-  creatorEmail,
   brands,
+  initialTiktokId,
 }: Props) {
   const router = useRouter();
-  const supabase = createClient();
 
+  const [tiktokId, setTiktokId] = useState(initialTiktokId);
+  const [note, setNote] = useState("");
   const [entries, setEntries] = useState<ApplyEntryForm[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,24 +60,59 @@ export default function ApplyForm({
     field: "startDate" | "endDate",
     value: string
   ) {
+    // ネイティブの日付ピッカーは min/max 属性を無視する環境があるため、
+    // 選択値を JS 側で強制的に補正（クランプ）して上限・下限を担保する。
+    let notice: string | null = null;
+
     setEntries((prev) =>
       prev.map((e, i) => {
         if (i !== entryIndex) return e;
         const schedules = e.schedules.map((s, si) => {
           if (si !== schedIndex) return s;
           const next = { ...s, [field]: value };
-          // 開始日を変更したとき、終了日が範囲外なら一旦クリアする
-          if (field === "startDate" && next.endDate) {
-            const maxEnd = addDaysStr(value, MAX_DAYS_PER_SCHEDULE - 1);
-            if (next.endDate < value || next.endDate > maxEnd) {
-              next.endDate = "";
+
+          if (field === "startDate") {
+            // 開始日は最短日（当日不可・17時以降は翌日も不可）以降に補正
+            if (value && value < minDate) {
+              next.startDate = minDate;
+              notice = `開始日は ${formatDate(minDate)} 以降です。調整しました。`;
+            }
+            // 開始日変更で終了日が範囲外になったらクリア
+            if (next.endDate && next.startDate) {
+              const maxEnd = addDaysStr(
+                next.startDate,
+                MAX_DAYS_PER_SCHEDULE - 1
+              );
+              if (next.endDate < next.startDate || next.endDate > maxEnd) {
+                next.endDate = "";
+              }
+            }
+          } else {
+            // 終了日は「開始日 〜 開始日+(最大3日)」の範囲にクランプ
+            if (next.startDate && value) {
+              const maxEnd = addDaysStr(
+                next.startDate,
+                MAX_DAYS_PER_SCHEDULE - 1
+              );
+              if (value > maxEnd) {
+                next.endDate = maxEnd;
+                notice = `1回の日程は最大${MAX_DAYS_PER_SCHEDULE}日間です。終了日を ${formatDate(
+                  maxEnd
+                )} に調整しました。`;
+              } else if (value < next.startDate) {
+                next.endDate = next.startDate;
+                notice = "終了日は開始日以降です。調整しました。";
+              }
             }
           }
+
           return next;
         });
         return { ...e, schedules };
       })
     );
+
+    setError(notice);
   }
 
   function addBrand() {
@@ -112,6 +148,16 @@ export default function ApplyForm({
 
   /** バリデーションして送信用の配列を返す。エラー時は文字列を投げる */
   function validate(): ApplyEntry[] {
+    const tid = normalizeTiktokId(tiktokId);
+    if (!tid) {
+      throw new Error("TikTokクリエイターIDを入力してください。");
+    }
+    if (!isValidTiktokId(tid)) {
+      throw new Error(
+        "TikTok IDは英数字・ピリオド・アンダースコア（2〜24文字）で入力してください。"
+      );
+    }
+
     const seenBrands = new Set<string>();
     const result: ApplyEntry[] = [];
 
@@ -184,7 +230,11 @@ export default function ApplyForm({
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries: payload }),
+        body: JSON.stringify({
+          tiktokId: normalizeTiktokId(tiktokId),
+          note: note.trim(),
+          entries: payload,
+        }),
       });
 
       if (!res.ok) {
@@ -200,7 +250,13 @@ export default function ApplyForm({
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      const liff = (await import("@line/liff")).default;
+      if (liff.isLoggedIn()) liff.logout();
+    } catch {
+      // LIFF外（通常ブラウザ）で開いている場合は無視
+    }
     router.replace("/");
     router.refresh();
   }
@@ -211,8 +267,8 @@ export default function ApplyForm({
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-3xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <p className="text-xs text-gray-400">LINEログイン中</p>
             <p className="text-sm font-semibold text-gray-900">{creatorName}</p>
-            <p className="text-xs text-gray-500">{creatorEmail}</p>
           </div>
           <button
             onClick={handleLogout}
@@ -240,6 +296,29 @@ export default function ApplyForm({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* TikTok クリエイターID */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
+              TikTok クリエイターID
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              プロフィールの「@」以降を入力してください（例：cosme_tokyo）。
+            </p>
+            <div className="flex items-center rounded-lg border border-gray-300 focus-within:border-pink-500 focus-within:ring-1 focus-within:ring-pink-500">
+              <span className="select-none pl-3 pr-1 text-gray-400">@</span>
+              <input
+                type="text"
+                value={tiktokId}
+                onChange={(e) => setTiktokId(e.target.value)}
+                placeholder="your_id"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full rounded-r-lg border-0 bg-transparent px-1 py-2 text-gray-900 focus:outline-none focus:ring-0"
+              />
+            </div>
+          </div>
+
           {entries.map((entry, i) => {
             // すでに他の項目で選択されているブランドは選択肢から除外
             const usedByOthers = entries
@@ -359,6 +438,24 @@ export default function ApplyForm({
               + ブランドを追加
             </button>
           )}
+
+          {/* 備考（自由記載） */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
+              備考（任意）
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              プレゼント設定など必要な場合は、こちらに時間を記載してください。
+            </p>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={4}
+              maxLength={1000}
+              placeholder="例：Cosme Tokyo は 20:00 からプレゼント設定をお願いします。"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+            />
+          </div>
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
