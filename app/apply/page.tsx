@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { CREATOR_COOKIE, verifySessionToken } from "@/lib/lineSession";
-import type { Brand } from "@/types";
+import type { Brand, Creator } from "@/types";
 import ApplyForm from "./ApplyForm";
 
 export const dynamic = "force-dynamic";
@@ -24,5 +25,19 @@ export default async function ApplyPage() {
 
   const brands = ((brandRows ?? []) as Brand[]).map((b) => b.name);
 
-  return <ApplyForm creatorName={session.name} brands={brands} />;
+  // 保存済みの TikTok ID を取得してプリフィルする
+  const admin = createAdminClient();
+  const { data: creator } = await admin
+    .from("creators")
+    .select("*")
+    .eq("line_user_id", session.uid)
+    .maybeSingle<Creator>();
+
+  return (
+    <ApplyForm
+      creatorName={session.name}
+      brands={brands}
+      initialTiktokId={creator?.tiktok_id ?? ""}
+    />
+  );
 }

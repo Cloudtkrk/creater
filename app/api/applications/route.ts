@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CREATOR_COOKIE, verifySessionToken } from "@/lib/lineSession";
 import { MAX_DAYS_PER_SCHEDULE } from "@/lib/brands";
 import { diffDaysInclusive, formatDate, getMinApplyDate } from "@/lib/date";
+import { isValidTiktokId, normalizeTiktokId } from "@/lib/tiktok";
 import type { ApplyEntry, Brand } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -15,11 +16,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "未認証です。" }, { status: 401 });
   }
 
-  let body: { entries?: ApplyEntry[] };
+  let body: { entries?: ApplyEntry[]; tiktokId?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "不正なリクエストです。" }, { status: 400 });
+  }
+
+  // TikTok クリエイターID の検証
+  const tiktokId = normalizeTiktokId(body.tiktokId ?? "");
+  if (!tiktokId) {
+    return NextResponse.json(
+      { error: "TikTokクリエイターIDを入力してください。" },
+      { status: 400 }
+    );
+  }
+  if (!isValidTiktokId(tiktokId)) {
+    return NextResponse.json(
+      { error: "TikTok IDの形式が正しくありません。" },
+      { status: 400 }
+    );
   }
 
   const entries = body.entries;
@@ -76,11 +92,26 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // TikTok ID を creators に保存（次回ログイン時のプリフィル用に永続化）
+  const { error: creatorError } = await supabase.from("creators").upsert(
+    {
+      line_user_id: session.uid,
+      tiktok_id: tiktokId,
+      name: session.name,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "line_user_id" }
+  );
+  if (creatorError) {
+    console.error("クリエイター情報の保存に失敗:", creatorError);
+  }
+
   const submissionId = randomUUID();
 
   const rows = entries.map((entry) => ({
     submission_id: submissionId,
     line_user_id: session.uid,
+    tiktok_id: tiktokId,
     creator_name: session.name,
     brand: entry.brand,
     start_date: entry.startDate,

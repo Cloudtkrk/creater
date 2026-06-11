@@ -342,19 +342,24 @@ export default function Dashboard({
                     {cell.day}
                   </div>
                   <div className="space-y-0.5">
-                    {dayApps.map((a) => (
-                      <div
-                        key={a.id}
-                        title={`${a.creator_name} / ${a.brand}`}
-                        className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight ${
-                          a.status === "approved"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {a.creator_name}・{a.brand}
-                      </div>
-                    ))}
+                    {dayApps.map((a) => {
+                      const label = a.tiktok_id
+                        ? `@${a.tiktok_id}`
+                        : a.creator_name;
+                      return (
+                        <div
+                          key={a.id}
+                          title={`${label} / ${a.brand}`}
+                          className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight ${
+                            a.status === "approved"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {label}・{a.brand}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -449,9 +454,11 @@ export default function Dashboard({
                   >
                     <td className="px-2 py-3">
                       <div className="font-medium text-gray-900">
-                        {a.creator_name}
+                        {a.tiktok_id ? `@${a.tiktok_id}` : "（ID未登録）"}
                       </div>
-                      <div className="text-xs text-gray-400">LINE</div>
+                      <div className="text-xs text-gray-400">
+                        LINE: {a.creator_name}
+                      </div>
                     </td>
                     <td className="px-2 py-3 text-gray-700">{a.brand}</td>
                     <td className="px-2 py-3 text-gray-700">

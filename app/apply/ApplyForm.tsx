@@ -13,11 +13,13 @@ import {
   formatDate,
   getMinApplyDate,
 } from "@/lib/date";
+import { isValidTiktokId, normalizeTiktokId } from "@/lib/tiktok";
 import type { ApplyEntryForm, ApplyEntry } from "@/types";
 
 interface Props {
   creatorName: string;
   brands: string[];
+  initialTiktokId: string;
 }
 
 function emptySchedule() {
@@ -28,9 +30,14 @@ function emptyEntry(): ApplyEntryForm {
   return { brand: "", schedules: [emptySchedule()] };
 }
 
-export default function ApplyForm({ creatorName, brands }: Props) {
+export default function ApplyForm({
+  creatorName,
+  brands,
+  initialTiktokId,
+}: Props) {
   const router = useRouter();
 
+  const [tiktokId, setTiktokId] = useState(initialTiktokId);
   const [entries, setEntries] = useState<ApplyEntryForm[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -140,6 +147,16 @@ export default function ApplyForm({ creatorName, brands }: Props) {
 
   /** バリデーションして送信用の配列を返す。エラー時は文字列を投げる */
   function validate(): ApplyEntry[] {
+    const tid = normalizeTiktokId(tiktokId);
+    if (!tid) {
+      throw new Error("TikTokクリエイターIDを入力してください。");
+    }
+    if (!isValidTiktokId(tid)) {
+      throw new Error(
+        "TikTok IDは英数字・ピリオド・アンダースコア（2〜24文字）で入力してください。"
+      );
+    }
+
     const seenBrands = new Set<string>();
     const result: ApplyEntry[] = [];
 
@@ -212,7 +229,10 @@ export default function ApplyForm({ creatorName, brands }: Props) {
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries: payload }),
+        body: JSON.stringify({
+          tiktokId: normalizeTiktokId(tiktokId),
+          entries: payload,
+        }),
       });
 
       if (!res.ok) {
@@ -274,6 +294,29 @@ export default function ApplyForm({ creatorName, brands }: Props) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* TikTok クリエイターID */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
+              TikTok クリエイターID
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              プロフィールの「@」以降を入力してください（例：cosme_tokyo）。
+            </p>
+            <div className="flex items-center rounded-lg border border-gray-300 focus-within:border-pink-500 focus-within:ring-1 focus-within:ring-pink-500">
+              <span className="select-none pl-3 pr-1 text-gray-400">@</span>
+              <input
+                type="text"
+                value={tiktokId}
+                onChange={(e) => setTiktokId(e.target.value)}
+                placeholder="your_id"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="w-full rounded-r-lg border-0 bg-transparent px-1 py-2 text-gray-900 focus:outline-none focus:ring-0"
+              />
+            </div>
+          </div>
+
           {entries.map((entry, i) => {
             // すでに他の項目で選択されているブランドは選択肢から除外
             const usedByOthers = entries

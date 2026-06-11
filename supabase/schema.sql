@@ -18,6 +18,8 @@ create table if not exists applications (
 -- 既存（メール版）の applications テーブルから移行する場合の調整。
 -- LINE版では line_user_id を使い、メール認証関連の列があれば制約を外す。
 alter table applications add column if not exists line_user_id text;
+-- TikTok クリエイターID（@以降のハンドル）
+alter table applications add column if not exists tiktok_id text;
 
 do $$
 begin
@@ -45,6 +47,21 @@ alter table applications enable row level security;
 -- ※ 既存のメール版ポリシーが残っていても害はないが、不要なら削除してよい。
 drop policy if exists "creator_select" on applications;
 drop policy if exists "creator_insert" on applications;
+
+
+-- ============================================================
+-- クリエイタープロフィール（LINEユーザーごとに TikTok ID を永続化）
+-- 申請時に upsert し、次回ログイン時にフォームへプリフィルする。
+-- ============================================================
+create table if not exists creators (
+  line_user_id text primary key,
+  tiktok_id text,
+  name text,
+  updated_at timestamptz default now()
+);
+
+alter table creators enable row level security;
+-- アクセスは管理者API（service_role）経由のみ。RLS はポリシー無しで有効化。
 
 
 -- ============================================================
