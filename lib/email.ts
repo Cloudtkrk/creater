@@ -23,7 +23,7 @@ export async function sendApprovalEmail(params: ApprovalMailParams) {
   // 検証済みドメインの送信元。RESEND_FROM で上書き可能。
   const from =
     process.env.RESEND_FROM ??
-    "EnterCommerce タイムセール事務局 <noreply@mail.entercommerce.co.jp>";
+    "NewTrend タイムセール設定連絡 <noreply@mail.entercommerce.co.jp>";
 
   const body = `${creatorName} さん
 
