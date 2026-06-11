@@ -20,6 +20,8 @@ create table if not exists applications (
 alter table applications add column if not exists line_user_id text;
 -- TikTok クリエイターID（@以降のハンドル）
 alter table applications add column if not exists tiktok_id text;
+-- 自由記載の備考（プレゼント設定の時間など）
+alter table applications add column if not exists note text;
 
 do $$
 begin

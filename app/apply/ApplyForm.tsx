@@ -38,6 +38,7 @@ export default function ApplyForm({
   const router = useRouter();
 
   const [tiktokId, setTiktokId] = useState(initialTiktokId);
+  const [note, setNote] = useState("");
   const [entries, setEntries] = useState<ApplyEntryForm[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -231,6 +232,7 @@ export default function ApplyForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tiktokId: normalizeTiktokId(tiktokId),
+          note: note.trim(),
           entries: payload,
         }),
       });
@@ -436,6 +438,24 @@ export default function ApplyForm({
               + ブランドを追加
             </button>
           )}
+
+          {/* 備考（自由記載） */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
+              備考（任意）
+            </label>
+            <p className="mb-2 text-xs text-gray-500">
+              プレゼント設定など必要な場合は、こちらに時間を記載してください。
+            </p>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={4}
+              maxLength={1000}
+              placeholder="例：Cosme Tokyo は 20:00 からプレゼント設定をお願いします。"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+            />
+          </div>
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

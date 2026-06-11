@@ -16,12 +16,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "未認証です。" }, { status: 401 });
   }
 
-  let body: { entries?: ApplyEntry[]; tiktokId?: string };
+  let body: { entries?: ApplyEntry[]; tiktokId?: string; note?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "不正なリクエストです。" }, { status: 400 });
   }
+
+  // 備考（任意・自由記載）。空文字は null として保存。
+  const note = (body.note ?? "").trim().slice(0, 1000) || null;
 
   // TikTok クリエイターID の検証
   const tiktokId = normalizeTiktokId(body.tiktokId ?? "");
@@ -116,6 +119,7 @@ export async function POST(req: NextRequest) {
     brand: entry.brand,
     start_date: entry.startDate,
     end_date: entry.endDate,
+    note,
     status: "pending",
   }));
 

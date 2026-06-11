@@ -23,6 +23,7 @@ export interface Application {
   brand: string;
   start_date: string; // YYYY-MM-DD
   end_date: string; // YYYY-MM-DD
+  note: string | null;
   status: ApplicationStatus;
   created_at: string;
   updated_at: string;

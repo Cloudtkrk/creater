@@ -426,12 +426,13 @@ export default function Dashboard({
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[760px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="px-2 py-2">クリエイター</th>
                   <th className="px-2 py-2">ブランド</th>
                   <th className="px-2 py-2">期間</th>
+                  <th className="px-2 py-2">備考</th>
                   <th className="px-2 py-2">ステータス</th>
                   <th className="px-2 py-2 text-right">操作</th>
                 </tr>
@@ -440,7 +441,7 @@ export default function Dashboard({
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-2 py-8 text-center text-gray-400"
                     >
                       該当する申請はありません。
@@ -463,6 +464,15 @@ export default function Dashboard({
                     <td className="px-2 py-3 text-gray-700">{a.brand}</td>
                     <td className="px-2 py-3 text-gray-700">
                       {formatDate(a.start_date)} 〜 {formatDate(a.end_date)}
+                    </td>
+                    <td className="px-2 py-3 text-gray-700">
+                      {a.note ? (
+                        <span className="block max-w-[220px] whitespace-pre-wrap break-words text-xs">
+                          {a.note}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-2 py-3">
                       <StatusBadge status={a.status} />
