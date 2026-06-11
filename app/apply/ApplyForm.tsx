@@ -52,24 +52,59 @@ export default function ApplyForm({ creatorName, brands }: Props) {
     field: "startDate" | "endDate",
     value: string
   ) {
+    // ネイティブの日付ピッカーは min/max 属性を無視する環境があるため、
+    // 選択値を JS 側で強制的に補正（クランプ）して上限・下限を担保する。
+    let notice: string | null = null;
+
     setEntries((prev) =>
       prev.map((e, i) => {
         if (i !== entryIndex) return e;
         const schedules = e.schedules.map((s, si) => {
           if (si !== schedIndex) return s;
           const next = { ...s, [field]: value };
-          // 開始日を変更したとき、終了日が範囲外なら一旦クリアする
-          if (field === "startDate" && next.endDate) {
-            const maxEnd = addDaysStr(value, MAX_DAYS_PER_SCHEDULE - 1);
-            if (next.endDate < value || next.endDate > maxEnd) {
-              next.endDate = "";
+
+          if (field === "startDate") {
+            // 開始日は最短日（当日不可・17時以降は翌日も不可）以降に補正
+            if (value && value < minDate) {
+              next.startDate = minDate;
+              notice = `開始日は ${formatDate(minDate)} 以降です。調整しました。`;
+            }
+            // 開始日変更で終了日が範囲外になったらクリア
+            if (next.endDate && next.startDate) {
+              const maxEnd = addDaysStr(
+                next.startDate,
+                MAX_DAYS_PER_SCHEDULE - 1
+              );
+              if (next.endDate < next.startDate || next.endDate > maxEnd) {
+                next.endDate = "";
+              }
+            }
+          } else {
+            // 終了日は「開始日 〜 開始日+(最大3日)」の範囲にクランプ
+            if (next.startDate && value) {
+              const maxEnd = addDaysStr(
+                next.startDate,
+                MAX_DAYS_PER_SCHEDULE - 1
+              );
+              if (value > maxEnd) {
+                next.endDate = maxEnd;
+                notice = `1回の日程は最大${MAX_DAYS_PER_SCHEDULE}日間です。終了日を ${formatDate(
+                  maxEnd
+                )} に調整しました。`;
+              } else if (value < next.startDate) {
+                next.endDate = next.startDate;
+                notice = "終了日は開始日以降です。調整しました。";
+              }
             }
           }
+
           return next;
         });
         return { ...e, schedules };
       })
     );
+
+    setError(notice);
   }
 
   function addBrand() {
