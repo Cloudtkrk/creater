@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   MAX_BRANDS,
   MAX_SCHEDULES_PER_BRAND,
@@ -18,7 +17,6 @@ import type { ApplyEntryForm, ApplyEntry } from "@/types";
 
 interface Props {
   creatorName: string;
-  creatorEmail: string;
   brands: string[];
 }
 
@@ -30,13 +28,8 @@ function emptyEntry(): ApplyEntryForm {
   return { brand: "", schedules: [emptySchedule()] };
 }
 
-export default function ApplyForm({
-  creatorName,
-  creatorEmail,
-  brands,
-}: Props) {
+export default function ApplyForm({ creatorName, brands }: Props) {
   const router = useRouter();
-  const supabase = createClient();
 
   const [entries, setEntries] = useState<ApplyEntryForm[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
@@ -200,7 +193,13 @@ export default function ApplyForm({
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
+    try {
+      const liff = (await import("@line/liff")).default;
+      if (liff.isLoggedIn()) liff.logout();
+    } catch {
+      // LIFF外（通常ブラウザ）で開いている場合は無視
+    }
     router.replace("/");
     router.refresh();
   }
@@ -211,8 +210,8 @@ export default function ApplyForm({
       <header className="sticky top-0 z-10 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-3xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <p className="text-xs text-gray-400">LINEログイン中</p>
             <p className="text-sm font-semibold text-gray-900">{creatorName}</p>
-            <p className="text-xs text-gray-500">{creatorEmail}</p>
           </div>
           <button
             onClick={handleLogout}

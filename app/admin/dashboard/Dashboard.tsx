@@ -451,9 +451,7 @@ export default function Dashboard({
                       <div className="font-medium text-gray-900">
                         {a.creator_name}
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {a.creator_email}
-                      </div>
+                      <div className="text-xs text-gray-400">LINE</div>
                     </td>
                     <td className="px-2 py-3 text-gray-700">{a.brand}</td>
                     <td className="px-2 py-3 text-gray-700">

@@ -1,25 +1,22 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { CREATOR_COOKIE, verifySessionToken } from "@/lib/lineSession";
 import type { Brand } from "@/types";
 import ApplyForm from "./ApplyForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function ApplyPage() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const token = cookies().get(CREATOR_COOKIE)?.value;
+  const session = await verifySessionToken(token);
 
-  if (!user) {
+  if (!session) {
     redirect("/");
   }
 
-  const name =
-    (user.user_metadata?.name as string | undefined) ?? user.email ?? "クリエイター";
-  const email = user.email ?? "";
-
   // ブランド一覧（管理画面で管理）を取得
+  const supabase = createClient();
   const { data: brandRows } = await supabase
     .from("brands")
     .select("*")
@@ -27,7 +24,5 @@ export default async function ApplyPage() {
 
   const brands = ((brandRows ?? []) as Brand[]).map((b) => b.name);
 
-  return (
-    <ApplyForm creatorName={name} creatorEmail={email} brands={brands} />
-  );
+  return <ApplyForm creatorName={session.name} brands={brands} />;
 }

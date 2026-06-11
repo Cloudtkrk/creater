@@ -1,12 +1,12 @@
--- タイムセール管理アプリ DBスキーマ
+-- タイムセール管理アプリ DBスキーマ（LINEログイン版）
 -- Supabase の SQL Editor で実行してください。
+-- 新規プロジェクト・既存DBのどちらでも安全に実行できます。
 
 create table if not exists applications (
   id uuid default gen_random_uuid() primary key,
   submission_id uuid not null,
-  creator_id uuid references auth.users on delete cascade,
+  line_user_id text,
   creator_name text not null,
-  creator_email text not null,
   brand text not null,
   start_date date not null,
   end_date date not null,
@@ -15,18 +15,36 @@ create table if not exists applications (
   updated_at timestamptz default now()
 );
 
+-- 既存（メール版）の applications テーブルから移行する場合の調整。
+-- LINE版では line_user_id を使い、メール認証関連の列があれば制約を外す。
+alter table applications add column if not exists line_user_id text;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'applications' and column_name = 'creator_email'
+  ) then
+    alter table applications alter column creator_email drop not null;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'applications' and column_name = 'creator_id'
+  ) then
+    alter table applications alter column creator_id drop not null;
+  end if;
+end $$;
+
 alter table applications enable row level security;
 
--- クリエイターは自分の申請のみ参照できる
-create policy "creator_select" on applications
-  for select using (auth.uid() = creator_id);
-
--- クリエイターは自分の申請のみ作成できる
-create policy "creator_insert" on applications
-  for insert with check (auth.uid() = creator_id);
-
--- 管理者側の参照・更新は service role key を使用するため、
--- RLS をバイパスします（追加ポリシーは不要）。
+-- クリエイターは Supabase Auth を使わず、書き込み・参照はすべて
+-- 管理者API（service_role キー）経由で行うため、RLS はポリシー無しで
+-- 有効化しておく（anon からの直接アクセスを拒否する）。service_role は
+-- RLS をバイパスする。
+-- ※ 既存のメール版ポリシーが残っていても害はないが、不要なら削除してよい。
+drop policy if exists "creator_select" on applications;
+drop policy if exists "creator_insert" on applications;
 
 
 -- ============================================================

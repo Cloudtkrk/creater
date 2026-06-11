@@ -9,9 +9,8 @@ export interface Brand {
 export interface Application {
   id: string;
   submission_id: string;
-  creator_id: string;
+  line_user_id: string | null;
   creator_name: string;
-  creator_email: string;
   brand: string;
   start_date: string; // YYYY-MM-DD
   end_date: string; // YYYY-MM-DD
