@@ -27,3 +27,31 @@ create policy "creator_insert" on applications
 
 -- 管理者側の参照・更新は service role key を使用するため、
 -- RLS をバイパスします（追加ポリシーは不要）。
+
+
+-- ============================================================
+-- ブランドマスタ（管理画面から追加・削除する）
+-- ============================================================
+create table if not exists brands (
+  id uuid default gen_random_uuid() primary key,
+  name text not null unique,
+  created_at timestamptz default now()
+);
+
+alter table brands enable row level security;
+
+-- ブランド一覧は全ユーザー（クリエイター含む）が参照できる
+create policy "brands_public_select" on brands
+  for select using (true);
+
+-- 追加・削除は service role key 経由（管理者API）のみ。
+-- RLS をバイパスするため insert/delete ポリシーは作成しない。
+
+-- 初期ブランド（既存の5ブランド）を投入
+insert into brands (name) values
+  ('Cosme Tokyo'),
+  ('Style Lab'),
+  ('FreshFit'),
+  ('HomeBliss'),
+  ('GlowUp Japan')
+on conflict (name) do nothing;

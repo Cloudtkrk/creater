@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
-import { BRANDS, MAX_DAYS_PER_SCHEDULE } from "@/lib/brands";
-import { diffDaysInclusive } from "@/lib/date";
-import type { ApplyEntry } from "@/types";
+import { MAX_DAYS_PER_SCHEDULE } from "@/lib/brands";
+import { diffDaysInclusive, formatDate, getMinApplyDate } from "@/lib/date";
+import type { ApplyEntry, Brand } from "@/types";
 
 export async function POST(req: NextRequest) {
   const supabase = createClient();
@@ -32,9 +32,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // 登録済みブランド一覧を取得してホワイトリストにする
+  const { data: brandRows } = await supabase.from("brands").select("name");
+  const validBrands = new Set(
+    ((brandRows ?? []) as Pick<Brand, "name">[]).map((b) => b.name)
+  );
+
+  // 選択可能な最短日（当日不可・17時以降は翌日も不可）
+  const minDate = getMinApplyDate();
+
   // サーバー側でもバリデーション
   for (const entry of entries) {
-    if (!entry.brand || !BRANDS.includes(entry.brand as (typeof BRANDS)[number])) {
+    if (!entry.brand || !validBrands.has(entry.brand)) {
       return NextResponse.json(
         { error: "不正なブランドが含まれています。" },
         { status: 400 }
@@ -43,6 +52,12 @@ export async function POST(req: NextRequest) {
     if (!entry.startDate || !entry.endDate) {
       return NextResponse.json(
         { error: "日程が入力されていません。" },
+        { status: 400 }
+      );
+    }
+    if (entry.startDate < minDate) {
+      return NextResponse.json(
+        { error: `開始日は ${formatDate(minDate)} 以降にしてください。` },
         { status: 400 }
       );
     }

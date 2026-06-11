@@ -57,6 +57,11 @@ ADMIN_PASSWORD=admin123
 ### 3. データベースの初期化
 
 Supabase プロジェクトの SQL Editor で [`supabase/schema.sql`](./supabase/schema.sql) を実行します。
+`applications` テーブルに加えて、ブランドを管理する `brands` テーブル（初期5ブランドのシード付き）が作成されます。
+
+> **既にデプロイ済みで `brands` テーブルが無い場合**は、`supabase/schema.sql` の
+> 「ブランドマスタ」以降の SQL（`create table ... brands` 〜 `insert into brands ...`）だけを
+> SQL Editor で再実行してください。`if not exists` / `on conflict do nothing` で安全に追加できます。
 
 ### 4. 開発サーバーの起動
 

@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendApprovalEmail } from "@/lib/email";
-import { ADMIN_COOKIE, verifyAdminToken } from "@/lib/adminAuth";
+import { isAdminAuthorized } from "@/lib/adminRequest";
 import type { Application, UpdateApplicationBody } from "@/types";
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // 管理者認証:
-  //  1) Authorization ヘッダーに ADMIN_PASSWORD を含める（API直接利用向け）
-  //  2) 管理者セッション cookie（ダッシュボードからの呼び出し向け）
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  const auth = req.headers.get("authorization") ?? "";
-  const headerToken = auth.replace(/^Bearer\s+/i, "").trim();
-  const headerOk = !!adminPassword && headerToken === adminPassword;
-
-  const cookieToken = cookies().get(ADMIN_COOKIE)?.value;
-  const cookieOk = await verifyAdminToken(cookieToken);
-
-  if (!headerOk && !cookieOk) {
+  if (!(await isAdminAuthorized(req))) {
     return NextResponse.json({ error: "認証に失敗しました。" }, { status: 401 });
   }
 

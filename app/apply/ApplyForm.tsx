@@ -1,20 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  BRANDS,
   MAX_BRANDS,
   MAX_SCHEDULES_PER_BRAND,
   MAX_DAYS_PER_SCHEDULE,
 } from "@/lib/brands";
-import { diffDaysInclusive } from "@/lib/date";
+import {
+  addDaysStr,
+  diffDaysInclusive,
+  formatDate,
+  getMinApplyDate,
+} from "@/lib/date";
 import type { ApplyEntryForm, ApplyEntry } from "@/types";
 
 interface Props {
   creatorName: string;
   creatorEmail: string;
+  brands: string[];
 }
 
 function emptySchedule() {
@@ -25,13 +30,22 @@ function emptyEntry(): ApplyEntryForm {
   return { brand: "", schedules: [emptySchedule()] };
 }
 
-export default function ApplyForm({ creatorName, creatorEmail }: Props) {
+export default function ApplyForm({
+  creatorName,
+  creatorEmail,
+  brands,
+}: Props) {
   const router = useRouter();
   const supabase = createClient();
 
   const [entries, setEntries] = useState<ApplyEntryForm[]>([emptyEntry()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 選択できる最短日（当日不可・17時以降は翌日も不可）。
+  const minDate = useMemo(() => getMinApplyDate(), []);
+  // 同時に申請できるブランド数の上限（登録ブランド数を超えない）
+  const maxBrandRows = Math.min(MAX_BRANDS, brands.length);
 
   function updateBrand(index: number, brand: string) {
     setEntries((prev) =>
@@ -48,16 +62,25 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
     setEntries((prev) =>
       prev.map((e, i) => {
         if (i !== entryIndex) return e;
-        const schedules = e.schedules.map((s, si) =>
-          si === schedIndex ? { ...s, [field]: value } : s
-        );
+        const schedules = e.schedules.map((s, si) => {
+          if (si !== schedIndex) return s;
+          const next = { ...s, [field]: value };
+          // 開始日を変更したとき、終了日が範囲外なら一旦クリアする
+          if (field === "startDate" && next.endDate) {
+            const maxEnd = addDaysStr(value, MAX_DAYS_PER_SCHEDULE - 1);
+            if (next.endDate < value || next.endDate > maxEnd) {
+              next.endDate = "";
+            }
+          }
+          return next;
+        });
         return { ...e, schedules };
       })
     );
   }
 
   function addBrand() {
-    if (entries.length >= MAX_BRANDS) return;
+    if (entries.length >= maxBrandRows) return;
     setEntries((prev) => [...prev, emptyEntry()]);
   }
 
@@ -111,6 +134,11 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
         if (!s.startDate || !s.endDate) {
           throw new Error(
             `ブランド「${entry.brand}」の日程に未入力があります。`
+          );
+        }
+        if (s.startDate < minDate) {
+          throw new Error(
+            `ブランド「${entry.brand}」: ${formatDate(minDate)} 以降の日付を選択してください。`
           );
         }
         if (s.endDate < s.startDate) {
@@ -200,9 +228,16 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
           タイムセール申請
         </h1>
         <p className="mb-6 text-sm text-gray-500">
-          最大{MAX_BRANDS}ブランド・各ブランド最大{MAX_SCHEDULES_PER_BRAND}回の日程（各
-          {MAX_DAYS_PER_SCHEDULE}日間まで）を申請できます。
+          最大{maxBrandRows || MAX_BRANDS}ブランド・各ブランド最大
+          {MAX_SCHEDULES_PER_BRAND}回の日程（各{MAX_DAYS_PER_SCHEDULE}日間まで）を
+          申請できます。開始日は{formatDate(minDate)}以降で選択してください。
         </p>
+
+        {brands.length === 0 && (
+          <p className="rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+            現在申請できるブランドが登録されていません。管理者にお問い合わせください。
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {entries.map((entry, i) => {
@@ -238,7 +273,7 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
                   className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
                 >
                   <option value="">ブランドを選択</option>
-                  {BRANDS.map((b) => (
+                  {brands.map((b) => (
                     <option
                       key={b}
                       value={b}
@@ -274,6 +309,7 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
                         <input
                           type="date"
                           value={s.startDate}
+                          min={minDate}
                           onChange={(e) =>
                             updateSchedule(i, si, "startDate", e.target.value)
                           }
@@ -283,10 +319,18 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
                         <input
                           type="date"
                           value={s.endDate}
+                          // 開始日以降〜最大3日間（開始日+2日）までに制限
+                          min={s.startDate || minDate}
+                          max={
+                            s.startDate
+                              ? addDaysStr(s.startDate, MAX_DAYS_PER_SCHEDULE - 1)
+                              : undefined
+                          }
+                          disabled={!s.startDate}
                           onChange={(e) =>
                             updateSchedule(i, si, "endDate", e.target.value)
                           }
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500 disabled:bg-gray-100 disabled:text-gray-400"
                         />
                       </div>
                     </div>
@@ -306,7 +350,7 @@ export default function ApplyForm({ creatorName, creatorEmail }: Props) {
             );
           })}
 
-          {entries.length < MAX_BRANDS && (
+          {entries.length < maxBrandRows && (
             <button
               type="button"
               onClick={addBrand}

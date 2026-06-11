@@ -1,5 +1,11 @@
 export type ApplicationStatus = "pending" | "approved" | "rejected";
 
+export interface Brand {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface Application {
   id: string;
   submission_id: string;
