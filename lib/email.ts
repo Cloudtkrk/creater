@@ -20,7 +20,10 @@ export async function sendApprovalEmail(params: ApprovalMailParams) {
   }
 
   const resend = new Resend(apiKey);
-  const from = process.env.RESEND_FROM ?? "onboarding@resend.dev";
+  // 検証済みドメインの送信元。RESEND_FROM で上書き可能。
+  const from =
+    process.env.RESEND_FROM ??
+    "EnterCommerce タイムセール事務局 <noreply@mail.entercommerce.co.jp>";
 
   const body = `${creatorName} さん
 
