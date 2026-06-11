@@ -34,14 +34,21 @@ function decodeAud(idToken: string): string {
  * Messaging API チャネルのIDとは異なるため、LINE_LOGIN_CHANNEL_ID を優先する。
  */
 export async function verifyLineIdToken(idToken: string): Promise<VerifyResult> {
-  const channelId =
-    process.env.LINE_LOGIN_CHANNEL_ID || process.env.LINE_CHANNEL_ID;
+  // ID トークン検証は LINE_LOGIN_CHANNEL_ID（LIFFが属するログインチャネルのID）を
+  // 最優先で参照する。未設定の場合のみ LINE_CHANNEL_ID にフォールバックする。
+  const loginChannelId = process.env.LINE_LOGIN_CHANNEL_ID?.trim();
+  const channelId = loginChannelId || process.env.LINE_CHANNEL_ID?.trim();
   if (!channelId) {
     return {
       ok: false,
-      detail: "LINE_CHANNEL_ID（または LINE_LOGIN_CHANNEL_ID）が未設定です。",
+      detail: "LINE_LOGIN_CHANNEL_ID（または LINE_CHANNEL_ID）が未設定です。",
     };
   }
+  console.info(
+    `LINE IDトークン検証に使用する client_id=${channelId}（参照元: ${
+      loginChannelId ? "LINE_LOGIN_CHANNEL_ID" : "LINE_CHANNEL_ID"
+    }）`
+  );
 
   const res = await fetch("https://api.line.me/oauth2/v2.1/verify", {
     method: "POST",
