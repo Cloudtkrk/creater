@@ -40,12 +40,27 @@ create table if not exists brands (
 
 alter table brands enable row level security;
 
--- ブランド一覧は全ユーザー（クリエイター含む）が参照できる
+-- 再実行しても安全なように、既存ポリシーがあれば一度削除する
+drop policy if exists "brands_public_select" on brands;
+drop policy if exists "brands_service_insert" on brands;
+drop policy if exists "brands_service_update" on brands;
+drop policy if exists "brands_service_delete" on brands;
+
+-- 閲覧：全ユーザー（匿名・クリエイター含む）が参照できる
 create policy "brands_public_select" on brands
   for select using (true);
 
--- 追加・削除は service role key 経由（管理者API）のみ。
--- RLS をバイパスするため insert/delete ポリシーは作成しない。
+-- 追加・更新・削除：管理者API（service_role キー）のみ許可する。
+-- service_role は本来 RLS をバイパスするが、意図を明示するために
+-- 明示的なポリシーも用意しておく（anon / authenticated には書き込み権限を与えない）。
+create policy "brands_service_insert" on brands
+  for insert to service_role with check (true);
+
+create policy "brands_service_update" on brands
+  for update to service_role using (true) with check (true);
+
+create policy "brands_service_delete" on brands
+  for delete to service_role using (true);
 
 -- 初期ブランド（既存の5ブランド）を投入
 insert into brands (name) values

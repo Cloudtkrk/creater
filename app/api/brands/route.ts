@@ -55,6 +55,19 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       );
     }
+    // RLS 違反（service_role キーが正しく設定されていない可能性）
+    if (error.code === "42501") {
+      console.error(
+        "ブランド追加が RLS で拒否されました。SUPABASE_SERVICE_ROLE_KEY が service_role キーか確認してください。"
+      );
+      return NextResponse.json(
+        {
+          error:
+            "追加できませんでした。サーバーの権限設定（SUPABASE_SERVICE_ROLE_KEY）をご確認ください。",
+        },
+        { status: 500 }
+      );
+    }
     console.error("ブランド追加に失敗:", error);
     return NextResponse.json({ error: "追加に失敗しました。" }, { status: 500 });
   }
