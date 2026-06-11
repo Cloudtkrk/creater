@@ -48,7 +48,8 @@ export default function LoginPage() {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "ログインに失敗しました。");
+          const base = data.error || "ログインに失敗しました。";
+          throw new Error(data.detail ? `${base}\n${data.detail}` : base);
         }
 
         if (cancelled) return;
@@ -56,6 +57,7 @@ export default function LoginPage() {
         router.refresh();
       } catch (err) {
         if (cancelled) return;
+        console.error("LINEログイン処理でエラー:", err);
         setPhase("error");
         setMessage(
           err instanceof Error ? err.message : "ログインに失敗しました。"
@@ -84,7 +86,7 @@ export default function LoginPage() {
           </div>
         ) : (
           <div className="mt-6">
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            <p className="whitespace-pre-line break-words rounded-lg bg-red-50 px-3 py-2 text-left text-sm text-red-600">
               {message}
             </p>
             <button

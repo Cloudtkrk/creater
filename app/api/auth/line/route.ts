@@ -22,14 +22,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const profile = await verifyLineIdToken(body.idToken);
-  if (!profile) {
+  const result = await verifyLineIdToken(body.idToken);
+  if (!result.ok) {
     return NextResponse.json(
-      { error: "LINE認証に失敗しました。" },
+      { error: "LINE認証に失敗しました。", detail: result.detail },
       { status: 401 }
     );
   }
 
+  const { profile } = result;
   const token = await createSessionToken(profile.userId, profile.name);
   const res = NextResponse.json({ success: true, name: profile.name });
 
